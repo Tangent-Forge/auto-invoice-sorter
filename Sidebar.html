@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body {
+        font-family: 'Google Sans', Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f8f9fa;
+      }
+      .container {
+        max-width: 380px;
+      }
+      h1 {
+        color: #202124;
+        font-size: 24px;
+        margin-bottom: 20px;
+      }
+      .card {
+        background: white;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      .btn {
+        display: block;
+        width: 100%;
+        padding: 12px;
+        margin-bottom: 8px;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      .btn-primary {
+        background-color: #0097A7;
+        color: white;
+      }
+      .btn-primary:hover {
+        background-color: #00838F;
+      }
+      .btn-secondary {
+        background-color: #f1f3f4;
+        color: #202124;
+      }
+      .btn-secondary:hover {
+        background-color: #e8eaed;
+      }
+      .btn-success {
+        background-color: #188038;
+        color: white;
+      }
+      .btn-success:hover {
+        background-color: #137333;
+      }
+      .invoice-item {
+        border: 1px solid #dadce0;
+        border-radius: 4px;
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+      .invoice-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .invoice-title {
+        font-weight: 600;
+        color: #202124;
+        font-size: 14px;
+        flex: 1;
+      }
+      .invoice-meta {
+        font-size: 12px;
+        color: #5f6368;
+        margin-bottom: 8px;
+      }
+      .confidence-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .confidence-high { background-color: #e6f4ea; color: #188038; }
+      .confidence-medium { background-color: #fef7e0; color: #f9ab00; }
+      .confidence-low { background-color: #fce8e6; color: #d93025; }
+      .invoice-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .invoice-btn {
+        flex: 1;
+        padding: 6px;
+        border: 1px solid #dadce0;
+        border-radius: 4px;
+        background: white;
+        color: #202124;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .invoice-btn:hover {
+        background-color: #f1f3f4;
+      }
+      .duplicate-item {
+        border-left: 4px solid #d93025;
+        padding: 12px;
+        margin-bottom: 12px;
+        background-color: #fce8e6;
+        border-radius: 0 4px 4px 0;
+      }
+      .loading {
+        text-align: center;
+        padding: 40px;
+        color: #5f6368;
+      }
+      .spinner {
+        border: 3px solid #f1f3f4;
+        border-top: 3px solid #0097A7;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      .error {
+        color: #d93025;
+        padding: 12px;
+        background-color: #fce8e6;
+        border-radius: 4px;
+        margin-bottom: 16px;
+      }
+      .success {
+        color: #188038;
+        padding: 12px;
+        background-color: #ceead6;
+        border-radius: 4px;
+        margin-bottom: 16px;
+      }
+      .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #5f6368;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🧾 Auto Invoice Sorter</h1>
+      
+      <div id="content">
+        <div class="card">
+          <p style="color: #5f6368; margin-bottom: 16px;">
+            Automatically identify, sort, and rename invoice files in Google Drive.
+          </p>
+          <button class="btn btn-primary" onclick="scanInvoices()">
+            Scan for Invoices
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentInvoices = [];
+      let selectedInvoices = [];
+
+      function scanInvoices() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Scanning for invoices...</p>
+          </div>
+        `;
+
+        google.script.run
+          .withSuccessHandler(onScanComplete)
+          .withFailureHandler(onScanError)
+          .apiScanFolder('root');
+      }
+
+      function onScanComplete(result) {
+        currentInvoices = result.invoices;
+        renderResults(result);
+      }
+
+      function renderResults(result) {
+        const content = document.getElementById('content');
+        
+        if (result.totalFound === 0) {
+          content.innerHTML = `
+            <div class="empty-state">
+              <p>📄 No invoices found</p>
+              <p style="font-size: 13px; margin-top: 8px;">
+                No files matching invoice patterns were found in the selected folder.
+              </p>
+            </div>
+            <button class="btn btn-secondary" onclick="scanInvoices()">
+              Scan Again
+            </button>
+          `;
+          return;
+        }
+        
+        let html = `
+          <div class="card">
+            <h3 style="margin: 0 0 16px 0; color: #202124; font-size: 16px;">
+              Found ${result.totalFound} Invoice${result.totalFound !== 1 ? 's' : ''}
+            </h3>
+            <p style="color: #5f6368; font-size: 13px; margin-bottom: 16px;">
+              Select invoices to sort into vendor folders.
+            </p>
+            <button class="btn btn-primary" onclick="selectAll()">
+              Select All
+            </button>
+            <button class="btn btn-secondary" onclick="clearSelection()">
+              Clear Selection
+            </button>
+            <button class="btn btn-success" onclick="sortSelected()" ${selectedInvoices.length === 0 ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+              Sort Selected (${selectedInvoices.length})
+            </button>
+          </div>
+        `;
+        
+        if (result.duplicates && result.duplicates.length > 0) {
+          html += `
+            <div class="card">
+              <h3 style="margin: 0 0 16px 0; color: #d93025; font-size: 16px;">
+                ⚠️ Potential Duplicates (${result.duplicates.length})
+              </h3>
+            ${result.duplicates.map(pair => renderDuplicateItem(pair, result)).join('')}
+          </div>
+          `;
+        }
+        
+        html += `
+          <div class="card">
+            <h3 style="margin: 0 0 16px 0; color: #202124; font-size: 16px;">
+              Invoices
+            </h3>
+            ${result.invoices.map(invoice => renderInvoiceItem(invoice)).join('')}
+          </div>
+        `;
+        
+        content.innerHTML = html;
+      }
+
+      function renderInvoiceItem(invoice) {
+        const isSelected = selectedInvoices.includes(invoice.id);
+        const confidenceClass = invoice.metadata.confidence >= 0.8 ? 'confidence-high' : 
+                            invoice.metadata.confidence >= 0.5 ? 'confidence-medium' : 'confidence-low';
+        const confidenceLabel = invoice.metadata.confidence >= 0.8 ? 'High' : 
+                              invoice.metadata.confidence >= 0.5 ? 'Medium' : 'Low';
+        
+        return `
+          <div class="invoice-item" ${isSelected ? 'style="background-color: #e8f0fe;"' : ''}>
+            <div class="invoice-header">
+              <input type="checkbox" 
+                ${isSelected ? 'checked' : ''} 
+                onchange="toggleSelection('${invoice.id}')"
+                style="margin-right: 12px;">
+              <div class="invoice-title">${invoice.name}</div>
+              <span class="confidence-badge ${confidenceClass}">${confidenceLabel}</span>
+            </div>
+            <div class="invoice-meta">
+              <div><strong>Vendor:</strong> ${invoice.metadata.vendor || 'Unknown'}</div>
+              <div><strong>Date:</strong> ${invoice.metadata.date || 'Not detected'}</div>
+              <div><strong>Amount:</strong> ${invoice.metadata.amount ? '$' + invoice.metadata.amount.toFixed(2) : 'Not detected'}</div>
+            </div>
+          </div>
+        `;
+      }
+
+      function renderDuplicateItem(pair, result) {
+        const invoice1 = result.invoices.find(i => i.id === pair[0]);
+        const invoice2 = result.invoices.find(i => i.id === pair[1]);
+        
+        return `
+          <div class="duplicate-item">
+            <strong>Potential Duplicate:</strong>
+            <div style="font-size: 13px; color: #5f6368; margin-top: 4px;">
+              1. ${invoice1.name}<br>
+              2. ${invoice2.name}
+            </div>
+            <div style="font-size: 12px; color: #5f6368; margin-top: 4px;">
+              Similar vendor, date, and amount detected.
+            </div>
+          </div>
+        `;
+      }
+
+      function toggleSelection(invoiceId) {
+        const index = selectedInvoices.indexOf(invoiceId);
+        if (index > -1) {
+          selectedInvoices.splice(index, 1);
+        } else {
+          selectedInvoices.push(invoiceId);
+        }
+        renderResults({ invoices: currentInvoices, duplicates: [], totalFound: currentInvoices.length });
+      }
+
+      function selectAll() {
+        selectedInvoices = currentInvoices.map(i => i.id);
+        renderResults({ invoices: currentInvoices, duplicates: [], totalFound: currentInvoices.length });
+      }
+
+      function clearSelection() {
+        selectedInvoices = [];
+        renderResults({ invoices: currentInvoices, duplicates: [], totalFound: currentInvoices.length });
+      }
+
+      function sortSelected() {
+        if (selectedInvoices.length === 0) {
+          alert('Please select at least one invoice to sort.');
+          return;
+        }
+
+        if (!confirm(`Sort ${selectedInvoices.length} invoice${selectedInvoices.length !== 1 ? 's' : ''} into vendor folders?`)) {
+          return;
+        }
+
+        const content = document.getElementById('content');
+        content.innerHTML = `
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Sorting invoices...</p>
+          </div>
+        `;
+
+        google.script.run
+          .withSuccessHandler(onSortComplete)
+          .withFailureHandler(onSortError)
+          .apiSortInvoices(selectedInvoices);
+      }
+
+      function onSortComplete(result) {
+        const content = document.getElementById('content');
+        
+        content.innerHTML = `
+          <div class="success">
+            <strong>Success!</strong> ${result.successful} of ${result.totalProcessed} invoices sorted.
+          </div>
+          <div class="card">
+            <p style="color: #5f6368; font-size: 13px; margin-bottom: 8px;">
+              <strong>Processed Folders:</strong> ${result.processedFolders.join(', ')}
+            </p>
+            <p style="color: #5f6368; font-size: 13px;">
+              <strong>Failed:</strong> ${result.failed}
+            </p>
+          </div>
+          <button class="btn btn-secondary" onclick="scanInvoices()">
+            Scan Again
+          </button>
+          <button class="btn btn-secondary" onclick="exportLog()">
+            Export Log
+          </button>
+        `;
+      }
+
+      function onSortError(error) {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+          <div class="error">
+            <strong>Error:</strong> ${error.message}
+          </div>
+          <button class="btn btn-secondary" onclick="scanInvoices()">
+            Try Again
+          </button>
+        `;
+      }
+
+      function exportLog() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Exporting log...</p>
+          </div>
+        `;
+
+        google.script.run
+          .withSuccessHandler(onExportComplete)
+          .withFailureHandler(onExportError)
+          .apiExportLog();
+      }
+
+      function onExportComplete(result) {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+          <div class="success">
+            <strong>Success!</strong> Log exported to Google Sheets.
+          </div>
+          <div class="card">
+            <p style="color: #5f6368; font-size: 13px; margin-bottom: 8px;">
+              <strong>Sheet URL:</strong> <a href="${result.url}" target="_blank">${result.url}</a>
+            </p>
+          </div>
+          <button class="btn btn-secondary" onclick="scanInvoices()">
+            Back to Scan
+          </button>
+        `;
+      }
+
+      function onExportError(error) {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+          <div class="error">
+            <strong>Error:</strong> ${error.message}
+          </div>
+          <button class="btn btn-secondary" onclick="scanInvoices()">
+            Back to Scan
+          </button>
+        `;
+      }
+
+      function onScanError(error) {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+          <div class="error">
+            <strong>Error:</strong> ${error.message}
+          </div>
+          <button class="btn btn-secondary" onclick="scanInvoices()">
+            Try Again
+          </button>
+        `;
+      }
+    </script>
+  </body>
+</html>
